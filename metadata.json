@@ -1,0 +1,5 @@
+{
+  "name": "StockShare",
+  "description": "一個具備高密度暗黑模式介面的私密社交型模擬交易終端，功能包含投資組合追蹤、好友排行榜以及 AI 市場分析。",
+  "requestFramePermissions": []
+}

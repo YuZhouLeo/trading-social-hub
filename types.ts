@@ -1,9 +1,11 @@
+
 export enum ViewState {
   DASHBOARD = 'DASHBOARD',
   GROUP = 'GROUP',
   FRIEND_PROFILE = 'FRIEND_PROFILE',
   SETTINGS = 'SETTINGS',
-  ARCHITECT_REVIEW = 'ARCHITECT_REVIEW' // Added to address the "Critique" request
+  ARCHITECT_REVIEW = 'ARCHITECT_REVIEW',
+  WINNING_CHECK = 'WINNING_CHECK' // 新增：飆股Check
 }
 
 export interface Stock {

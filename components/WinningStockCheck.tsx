@@ -1,197 +1,195 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createChart, ColorType, LineStyle } from 'lightweight-charts';
-import { Search, Terminal, AlertCircle, PlayCircle, BarChart2 } from 'lucide-react';
-
-// Mock data generator
-const generateMockData = (sid: string) => {
-  const data = [];
-  let price = sid === '2330' ? 750 : 100;
-  let margin = 5000;
-  let short = 1000;
-
-  for (let i = 0; i < 60; i++) {
-    // Random walk
-    price = price * (1 + (Math.random() * 0.04 - 0.02));
-    margin = margin + Math.floor(Math.random() * 500 - 200);
-    short = short + Math.floor(Math.random() * 200 - 50);
-
-    // Ensure positive
-    margin = Math.max(margin, 0);
-    short = Math.max(short, 0);
-
-    const date = new Date();
-    date.setDate(date.getDate() - (60 - i));
-    
-    // TradingView requires 'YYYY-MM-DD' format for time
-    const dateStr = date.toISOString().split('T')[0];
-    
-    data.push({
-      date: dateStr,
-      close: parseFloat(price.toFixed(2)),
-      margin: margin,
-      short: short
-    });
-  }
-  return data;
-};
+import { createChart, ColorType } from 'lightweight-charts';
+import { Search, Terminal, AlertCircle, PlayCircle, BarChart2, ServerCrash, Settings } from 'lucide-react';
 
 const WinningStockCheck: React.FC = () => {
   const [sid, setSid] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<any[] | null>(null);
+  const [showApiInput, setShowApiInput] = useState(false);
+  
+  // 優先使用環境變數，如果沒有則使用預設值
+  // 在 Zeabur 上，前端通常需要手動設定這個環境變數，或者我們允許使用者在 UI 輸入
+  const [apiUrl, setApiUrl] = useState(() => {
+    // 如果是本地開發
+    if (window.location.hostname === 'localhost') return "http://127.0.0.1:8000";
+    // 預設嘗試讀取環境變數 (需要在 Zeabur 前端服務設定 NEXT_PUBLIC_API_URL)
+    // 如果沒設定，預設為空，讓使用者輸入
+    return ""; 
+  });
 
   // Refs for chart containers
   const mainChartContainerRef = useRef<HTMLDivElement>(null);
   const subChartContainerRef = useRef<HTMLDivElement>(null);
+  const mainChartRef = useRef<any>(null);
+  const subChartRef = useRef<any>(null);
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (!sid) return;
+    if (!apiUrl) {
+        setError("請點擊設定 (齒輪圖示) 輸入您的後端 API 網址 (例如 https://xxx.zeabur.app)");
+        setShowApiInput(true);
+        return;
+    }
     
     setIsLoading(true);
-    setLogs([]);
+    setError(null);
     setData(null);
 
-    const steps = [
-      `FinLab Login: FCGjFUglptI... (OK)`,
-      `正在分析 ${sid} ...`,
-      `下載資料起始日: ${(new Date()).toISOString().split('T')[0]}`,
-      `取得 price:收盤價... OK`,
-      `取得 margin_transactions:融資今日餘額... OK`,
-      `取得 margin_transactions:融券今日餘額... OK`,
-      `資料篩選與 DataFrame 轉換完成`,
-      `啟動互動圖表 (TradingView Engine)...`
-    ];
+    // 移除 URL 尾部的斜線
+    const cleanUrl = apiUrl.replace(/\/$/, "");
 
-    let currentStep = 0;
-    const interval = setInterval(() => {
-      if (currentStep < steps.length) {
-        setLogs(prev => [...prev, steps[currentStep]]);
-        currentStep++;
-      } else {
-        clearInterval(interval);
-        setData(generateMockData(sid));
-        setIsLoading(false);
+    try {
+      console.log(`Fetching from: ${cleanUrl}/analyze/${sid}`);
+      const response = await fetch(`${cleanUrl}/analyze/${sid}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `API 請求失敗 (${response.status})`);
       }
-    }, 400);
+
+      const result = await response.json();
+      
+      if (Array.isArray(result)) {
+         setData(result);
+      } else {
+         throw new Error("回傳資料格式錯誤，必須是陣列");
+      }
+
+    } catch (err: any) {
+      console.error(err);
+      setError(`無法連接伺服器: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Effect to Initialize TradingView Charts when data is ready
+  // Effect to Initialize TradingView Charts
   useEffect(() => {
-    if (!data) return;
+    if (!data || data.length === 0) return;
 
-    // Common Chart Options (Dark Theme)
     const chartOptions = {
       layout: {
-        background: { type: ColorType.Solid, color: '#151A21' }, // fin-surface
-        textColor: '#94A3B8', // fin-subtext
+        background: { type: ColorType.Solid, color: '#151A21' },
+        textColor: '#94A3B8',
       },
       grid: {
         vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
         horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
       },
-      rightPriceScale: {
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-      },
-      timeScale: {
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-      },
-      crosshair: {
-        mode: 1, // Magnet
-      },
+      rightPriceScale: { borderColor: 'rgba(255, 255, 255, 0.1)' },
+      timeScale: { borderColor: 'rgba(255, 255, 255, 0.1)' },
+      crosshair: { mode: 1 },
     };
 
     // 1. Create Main Chart (Price)
-    let mainChart: any = null;
-    let subChart: any = null;
-
     if (mainChartContainerRef.current) {
-      mainChart = createChart(mainChartContainerRef.current, {
+      if (mainChartRef.current) mainChartRef.current.remove();
+
+      const chart = createChart(mainChartContainerRef.current, {
         ...chartOptions,
         width: mainChartContainerRef.current.clientWidth,
         height: 300,
       });
+      mainChartRef.current = chart;
 
-      const lineSeries = mainChart.addLineSeries({
-        color: '#60A5FA', // fin-primary
-        lineWidth: 2,
-        title: '股價',
+      const lineSeries = chart.addLineSeries({
+        color: '#60A5FA', lineWidth: 2, title: '股價',
       });
 
-      lineSeries.setData(data.map(d => ({ time: d.date, value: d.close })));
-      mainChart.timeScale().fitContent();
+      const priceData = data
+        .map(d => ({ time: d.date, value: d.close }))
+        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+        
+      lineSeries.setData(priceData);
+      chart.timeScale().fitContent();
     }
 
     // 2. Create Sub Chart (Margin & Short)
     if (subChartContainerRef.current) {
-      subChart = createChart(subChartContainerRef.current, {
+      if (subChartRef.current) subChartRef.current.remove();
+
+      const chart = createChart(subChartContainerRef.current, {
         ...chartOptions,
         width: subChartContainerRef.current.clientWidth,
         height: 250,
       });
+      subChartRef.current = chart;
 
-      // Margin (Red)
-      const marginSeries = subChart.addLineSeries({
-        color: '#F23645', // TW Up/Red
-        lineWidth: 2,
-        title: '融資餘額',
+      const marginSeries = chart.addLineSeries({
+        color: '#F23645', lineWidth: 2, title: '融資餘額',
       });
-      marginSeries.setData(data.map(d => ({ time: d.date, value: d.margin })));
+      const marginData = data
+        .map(d => ({ time: d.date, value: d.margin }))
+        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+      marginSeries.setData(marginData);
 
-      // Short (Green)
-      const shortSeries = subChart.addLineSeries({
-        color: '#089981', // TW Down/Green
-        lineWidth: 2,
-        title: '融券餘額',
+      const shortSeries = chart.addLineSeries({
+        color: '#089981', lineWidth: 2, title: '融券餘額',
       });
-      shortSeries.setData(data.map(d => ({ time: d.date, value: d.short })));
+      const shortData = data
+        .map(d => ({ time: d.date, value: d.short }))
+        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+      shortSeries.setData(shortData);
 
-      subChart.timeScale().fitContent();
+      chart.timeScale().fitContent();
     }
 
-    // Handle Resize
     const handleResize = () => {
-      if (mainChart && mainChartContainerRef.current) {
-        mainChart.applyOptions({ width: mainChartContainerRef.current.clientWidth });
+      if (mainChartRef.current && mainChartContainerRef.current) {
+        mainChartRef.current.applyOptions({ width: mainChartContainerRef.current.clientWidth });
       }
-      if (subChart && subChartContainerRef.current) {
-        subChart.applyOptions({ width: subChartContainerRef.current.clientWidth });
+      if (subChartRef.current && subChartContainerRef.current) {
+        subChartRef.current.applyOptions({ width: subChartContainerRef.current.clientWidth });
       }
     };
-
     window.addEventListener('resize', handleResize);
-
-    // Optional: Sync Visible Range (Simple one-way sync logic for demo)
-    // In a full production app, you'd bind visibleLogicalRangeChange handlers
-    
     return () => {
       window.removeEventListener('resize', handleResize);
-      if (mainChart) mainChart.remove();
-      if (subChart) subChart.remove();
+      if (mainChartRef.current) mainChartRef.current.remove();
+      if (subChartRef.current) subChartRef.current.remove();
     };
   }, [data]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500">
-      
-      {/* Header / Input Section */}
       <div className="glass-panel p-8 rounded-3xl border border-fin-border shadow-glow">
         <div className="flex items-start justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold text-fin-text flex items-center gap-2">
               <BarChart2 className="text-fin-up" />
-              飆股Check (FinLab 策略)
+              飆股Check
             </h2>
             <p className="text-fin-subtext mt-2 max-w-2xl">
-              此功能模擬 Python 腳本邏輯，現在整合了 <strong>TradingView Lightweight Charts</strong> 以提供更流暢的金融圖表體驗。
+              Python FinLab 數據串接
             </p>
           </div>
-          <div className="flex flex-col items-end gap-2">
-             <div className="bg-fin-surface border border-fin-border px-3 py-1 rounded text-xs text-fin-subtext font-mono">
-                v1.1.0 (TV Charts)
-             </div>
-          </div>
+          <button 
+            onClick={() => setShowApiInput(!showApiInput)}
+            className="p-2 text-fin-subtext hover:text-fin-text bg-fin-surface rounded-lg border border-fin-border"
+          >
+            <Settings size={18} />
+          </button>
         </div>
+
+        {showApiInput && (
+            <div className="mb-4 p-4 bg-fin-surface/50 rounded-xl border border-fin-primary/30">
+                <label className="text-xs text-fin-primary block mb-2 font-bold">後端 API 網址 (部署後請填入 Zeabur 後端網域)</label>
+                <input 
+                    type="text" 
+                    value={apiUrl}
+                    onChange={(e) => setApiUrl(e.target.value)}
+                    placeholder="https://your-api.zeabur.app"
+                    className="w-full bg-fin-bg border border-fin-border rounded-lg px-3 py-2 text-sm text-fin-text font-mono"
+                />
+            </div>
+        )}
 
         <div className="flex gap-4">
           <div className="relative flex-1 max-w-md">
@@ -200,65 +198,38 @@ const WinningStockCheck: React.FC = () => {
               type="text" 
               value={sid}
               onChange={(e) => setSid(e.target.value)}
-              placeholder="輸入股票代號 (例如 2330)" 
-              className="w-full bg-fin-bg border border-fin-border focus:border-fin-primary rounded-xl pl-10 pr-4 py-3 text-fin-text focus:outline-none focus:ring-2 focus:ring-fin-primary/20 transition-all font-mono"
+              placeholder="輸入代號 (2330)" 
+              className="w-full bg-fin-bg border border-fin-border focus:border-fin-primary rounded-xl pl-10 pr-4 py-3 text-fin-text focus:outline-none transition-all font-mono"
               onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
             />
           </div>
           <button 
             onClick={handleAnalyze}
             disabled={isLoading || !sid}
-            className="bg-fin-primary hover:bg-blue-600 text-white px-8 py-3 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="bg-fin-primary hover:bg-blue-600 text-white px-8 py-3 rounded-xl font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
           >
             {isLoading ? <span className="animate-spin">⏳</span> : <PlayCircle size={18} />}
-            執行分析
+            執行
           </button>
         </div>
       </div>
 
-      {/* Terminal Output Simulation */}
-      {(logs.length > 0 || isLoading) && (
-        <div className="bg-[#1e1e1e] rounded-xl border border-fin-border p-4 font-mono text-sm shadow-inner overflow-hidden">
-          <div className="flex items-center gap-2 text-gray-400 border-b border-gray-700 pb-2 mb-2">
-            <Terminal size={14} />
-            <span>Console Output</span>
-          </div>
-          <div className="space-y-1 text-gray-300">
-            {logs.map((log, idx) => (
-              <div key={idx} className="flex gap-2 animate-in slide-in-from-left-2 duration-300">
-                <span className="text-green-500">➜</span>
-                <span>{log}</span>
-              </div>
-            ))}
-            {isLoading && <div className="animate-pulse text-fin-primary">_</div>}
-          </div>
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-center gap-3 text-red-400">
+          <ServerCrash size={20} />
+          <span>{error}</span>
         </div>
       )}
 
-      {/* Charts Display */}
       {data && (
         <div className="space-y-6">
-          {/* Main Chart: Close Price */}
           <div className="glass-panel p-6 rounded-3xl border border-fin-border">
-            <h3 className="text-lg font-bold text-fin-text mb-4">股價走勢 (TradingView)</h3>
-            <div 
-                ref={mainChartContainerRef} 
-                className="w-full h-[300px] border border-fin-border/30 rounded-lg overflow-hidden" 
-            />
+            <h3 className="text-lg font-bold text-fin-text mb-4">股價</h3>
+            <div ref={mainChartContainerRef} className="w-full h-[300px] border border-fin-border/30 rounded-lg overflow-hidden" />
           </div>
-
-          {/* Subchart: Margin vs Short */}
           <div className="glass-panel p-6 rounded-3xl border border-fin-border">
-            <h3 className="text-lg font-bold text-fin-text mb-4">資券變化 (融資=紅, 融券=綠)</h3>
-            <div 
-                ref={subChartContainerRef} 
-                className="w-full h-[250px] border border-fin-border/30 rounded-lg overflow-hidden" 
-            />
-          </div>
-
-          <div className="flex items-center gap-2 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-yellow-500 text-sm">
-             <AlertCircle size={16} />
-             <span>注意：您正在瀏覽前端生成的模擬數據。真實部署需連接 FinLab Python API。</span>
+            <h3 className="text-lg font-bold text-fin-text mb-4">資券</h3>
+            <div ref={subChartContainerRef} className="w-full h-[250px] border border-fin-border/30 rounded-lg overflow-hidden" />
           </div>
         </div>
       )}

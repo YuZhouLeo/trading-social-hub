@@ -7,19 +7,14 @@ import {
   Search, 
   Bell, 
   Menu,
-  Lock,
-  MessageSquare,
-  ClipboardList,
-  ArrowUpRight,
-  ArrowDownRight,
   MoreHorizontal,
-  Zap,
-  Rocket // Added Rocket icon
+  ArrowUpRight,
+  Rocket, // Added Rocket icon
+  ClipboardList
 } from 'lucide-react';
 import StockChart from './components/StockChart';
 import ArchitectNotes from './components/ArchitectNotes';
-import WinningStockCheck from './components/WinningStockCheck'; // Import new component
-import { analyzeStock } from './services/geminiService';
+import WinningStockCheck from './components/WinningStockCheck';
 import { CURRENT_USER, FRIENDS_GROUP, MOCK_MARKET_DATA } from './constants';
 import { ViewState, User } from './types';
 
@@ -45,20 +40,10 @@ export default function App() {
   const [view, setView] = useState<ViewState>(ViewState.DASHBOARD);
   const [selectedFriend, setSelectedFriend] = useState<User | null>(null);
   const [activeSymbol, setActiveSymbol] = useState<string>('2330');
-  const [aiAnalysis, setAiAnalysis] = useState<string>('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const displayUser = view === ViewState.FRIEND_PROFILE && selectedFriend ? selectedFriend : CURRENT_USER;
   const isReadOnly = view === ViewState.FRIEND_PROFILE;
-
-  const handleAnalyze = async () => {
-    setAiAnalysis('Gemini 正在深入分析市場數據，請稍候...');
-    const stock = MOCK_MARKET_DATA[activeSymbol];
-    if (stock) {
-      const result = await analyzeStock(stock.symbol, stock.price, stock.changePercent);
-      setAiAnalysis(result || '分析暫時無法使用');
-    }
-  };
   
   const navigateToFriend = (friend: User) => {
     setSelectedFriend(friend);
@@ -363,51 +348,8 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Right Sidebar: AI & Watchlist */}
+              {/* Right Sidebar: Market Status (AI removed) */}
               <div className="xl:col-span-4 flex flex-col gap-6">
-                 {/* AI Analysis Card */}
-                 <div className="glass-panel rounded-3xl border border-fin-border flex flex-col overflow-hidden relative">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
-                    <div className="p-6 pb-0">
-                       <div className="flex items-center gap-2 mb-4">
-                         <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg text-white">
-                           <MessageSquare size={18} />
-                         </div>
-                         <h3 className="font-bold text-lg text-fin-text">Gemini 智能投顧</h3>
-                       </div>
-                       <p className="text-sm text-fin-subtext mb-4">
-                         針對 <span className="text-fin-text font-bold">{activeSymbol}</span> 的即時技術分析。
-                       </p>
-                    </div>
-                    
-                    <div className="flex-1 p-6 pt-0 overflow-y-auto max-h-[400px] custom-scrollbar">
-                      <div className="bg-fin-bg/50 rounded-2xl p-4 border border-fin-border text-sm leading-7 text-fin-text/90 shadow-inner">
-                        {aiAnalysis ? (
-                           <div className="whitespace-pre-line animate-in fade-in slide-in-from-bottom-2 duration-500">
-                             {aiAnalysis}
-                           </div>
-                        ) : (
-                           <div className="flex flex-col items-center justify-center py-8 text-center">
-                              <div className="w-12 h-12 rounded-full bg-fin-surface mb-3 flex items-center justify-center animate-pulse">
-                                <Search size={20} className="text-fin-subtext" />
-                              </div>
-                              <p className="text-fin-subtext text-xs">等待指令中...</p>
-                           </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="p-4 border-t border-fin-border bg-fin-surface/30">
-                       <button 
-                         onClick={handleAnalyze} 
-                         className="w-full py-3 rounded-xl bg-fin-text text-fin-bg font-bold text-sm hover:bg-white transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
-                       >
-                         <Zap size={16} className="fill-current" />
-                         生成分析報告
-                       </button>
-                    </div>
-                 </div>
-
                  {/* Market Status (Mini) */}
                  <div className="glass-panel p-6 rounded-3xl border border-fin-border">
                     <h4 className="text-sm font-bold text-fin-subtext uppercase mb-4">市場概況 (TWSE)</h4>

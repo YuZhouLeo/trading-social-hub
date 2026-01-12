@@ -1,8 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import finlab_sdk
-from finlab_sdk.online import get_data
+import finlab
+from finlab.online import get_data
 import os
 
 app = FastAPI(title="Stock API", version="1.0.0")
@@ -19,7 +19,7 @@ app.add_middleware(
 # 初始化 FinLab
 FINLAB_API_TOKEN = os.getenv("FINLAB_API_TOKEN")
 if FINLAB_API_TOKEN:
-    finlab_sdk.setup(api_token=FINLAB_API_TOKEN)
+    finlab.setup(api_token=FINLAB_API_TOKEN)
 
 class StockRequest(BaseModel):
     symbol: str
